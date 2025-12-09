@@ -26,6 +26,17 @@ func parseInput(input string) (string, []string) {
 	return command, args
 }
 
+func executeNotBuiltInCommand(command string, args []string) {
+	cmd := exec.Command(command, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+}
+
 func main() {
 
 	// read a line of input from the user
@@ -39,21 +50,13 @@ func main() {
 
 		command, args := parseInput(input)
 
-		if command == "" {
+		switch command {
+		case "":
 			continue
-		}
-
-		if command == "exit" {
+		case "exit":
 			os.Exit(0)
-		}
-
-		cmd := exec.Command(command, args...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		err := cmd.Run()
-		if err != nil {
-			fmt.Println(err.Error())
+		default:
+			executeNotBuiltInCommand(command, args)
 		}
 	}
 
