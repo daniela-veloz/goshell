@@ -8,6 +8,24 @@ import (
 	"strings"
 )
 
+func parseInput(input string) (string, []string) {
+	// remove empty spaces from the input
+	input = strings.TrimSpace(input)
+
+	// split input
+	parts := strings.Fields(input)
+
+	if len(parts) == 0 {
+		return "", nil
+	}
+
+	// create commands, first string is the command and the rest are arguments
+	command := parts[0]
+	args := parts[1:]
+
+	return command, args
+}
+
 func main() {
 
 	// read a line of input from the user
@@ -18,18 +36,12 @@ func main() {
 		fmt.Print("> ")
 		// read the keyboard string
 		input, _ := reader.ReadString('\n')
-		// remove empty spaces from the input
-		input = strings.TrimSpace(input)
 
-		if input == "" {
+		command, args := parseInput(input)
+
+		if command == "" {
 			continue
 		}
-
-		// split input
-		parts := strings.Fields(input)
-		// create commands, first string is the command and the rest are arguments
-		command := parts[0]
-		args := parts[1:]
 
 		if command == "exit" {
 			os.Exit(0)
