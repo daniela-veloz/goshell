@@ -22,11 +22,20 @@ func main() {
 		if input == "exit" {
 			os.Exit(0)
 		}
+
+		if input == "" {
+			continue
+		}
 		// run command
-		cmd := exec.Command(input)
+		args := strings.Fields(input)
+		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		cmd.Run()
+
+		err := cmd.Run()
+		if err != nil {
+			fmt.Println(err.Error())
+		}
 	}
 
 }
