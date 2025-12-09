@@ -15,20 +15,27 @@ func main() {
 
 	for {
 		// display the prompt
-		fmt.Print("ccsh> ")
+		fmt.Print("> ")
+		// read the keyboard string
 		input, _ := reader.ReadString('\n')
+		// remove empty spaces from the input
 		input = strings.TrimSpace(input)
-
-		if input == "exit" {
-			os.Exit(0)
-		}
 
 		if input == "" {
 			continue
 		}
-		// run command
-		args := strings.Fields(input)
-		cmd := exec.Command(args[0], args[1:]...)
+
+		// split input
+		parts := strings.Fields(input)
+		// create commands, first string is the command and the rest are arguments
+		command := parts[0]
+		args := parts[1:]
+
+		if command == "exit" {
+			os.Exit(0)
+		}
+
+		cmd := exec.Command(command, args...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 
