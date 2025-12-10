@@ -2,9 +2,12 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 )
 
@@ -16,6 +19,8 @@ type Command struct {
 func parseInput(input string) ([]Command, error) {
 	// remove empty spaces from the input
 	input = strings.TrimSpace(input)
+
+	// return empty command slice if input is empty
 	if input == "" {
 		return []Command{}, nil
 	}
@@ -39,25 +44,56 @@ func parseInput(input string) ([]Command, error) {
 	return commands, nil
 }
 
-/*
-*
-function execute commands using computer os
-*/
-func executeNotBuiltInCommand(command string, args []string) error {
-	cmd := exec.Command(command, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+// setupSignalHandler creates a context that will be cancelled when CTRL+C is pressed.
+// Returns the context and a cleanup function that should be deferred.
+func setupSignalHandler() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
 
-	return cmd.Run()
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+
+	go func() {
+		<-sigChan
+		cancel()
+	}()
+
+	// Return a wrapped cancel function that also stops signal notifications
+	cleanup := func() {
+		signal.Stop(sigChan)
+		cancel()
+	}
+
+	return ctx, cleanup
 }
 
-/*
-*
-function to execute "cd" as a built-in command
-*/
+// handleCommandError checks if an error is due to context cancellation (CTRL+C).
+// If so, it prints a newline and returns nil. Otherwise, it returns the original error.
+func handleCommandError(ctx context.Context, err error) error {
+	if err != nil && errors.Is(ctx.Err(), context.Canceled) {
+		fmt.Println() // Print newline after ^C
+		return nil    // Don't treat ^C as an error
+	}
+	return err
+}
+
+// executeNotBuiltInCommand executes commands using the computer's OS.
+func executeNotBuiltInCommand(command string, args []string) error {
+	ctx, cleanup := setupSignalHandler()
+	defer cleanup()
+
+	cmd := exec.CommandContext(ctx, command, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	err := cmd.Run()
+	return handleCommandError(ctx, err)
+}
+
+// executeCdCommand executes the "cd" built-in command to change directories.
 func executeCdCommand(args []string) error {
 	var path string
-	if len(args) == 0 {
+	if len(args) == 0 { // if no path is defined it defaults to $HOME
 		path = os.Getenv("HOME")
 	} else {
 		path = args[0]
@@ -65,10 +101,7 @@ func executeCdCommand(args []string) error {
 	return os.Chdir(path)
 }
 
-/*
-*
-function to execute single command. Built-in commands cannot be part of pipes
-*/
+// executeSingleCommand executes a single command. Built-in commands cannot be part of pipes.
 func executeSingleCommand(command Command) error {
 	switch command.name {
 	case "":
@@ -83,10 +116,7 @@ func executeSingleCommand(command Command) error {
 	}
 }
 
-/*
-*
-Function to execute a piped command
-*/
+// executePipeline executes a series of piped commands.
 func executePipeline(commands []Command) error {
 	if len(commands) == 0 {
 		return nil
@@ -94,6 +124,11 @@ func executePipeline(commands []Command) error {
 	if len(commands) == 1 {
 		return executeSingleCommand(commands[0])
 	}
+
+	// Create context so it can be cancelled
+	ctx, cleanup := setupSignalHandler()
+	defer cleanup()
+
 	// Check for built-in commands in pipeline
 	for _, cmd := range commands {
 		if cmd.name == "cd" || cmd.name == "exit" {
@@ -101,10 +136,10 @@ func executePipeline(commands []Command) error {
 		}
 	}
 
-	// crete commands
+	// create commands
 	var cmds []*exec.Cmd //slice of pointers to exec.Cmd so we can modify them later
 	for _, command := range commands {
-		cmd := exec.Command(command.name, command.args...)
+		cmd := exec.CommandContext(ctx, command.name, command.args...)
 		cmds = append(cmds, cmd)
 	}
 
@@ -135,7 +170,7 @@ func executePipeline(commands []Command) error {
 	// Wait for all commands
 	for _, cmd := range cmds {
 		if err := cmd.Wait(); err != nil {
-			return err
+			return handleCommandError(ctx, err)
 		}
 	}
 
