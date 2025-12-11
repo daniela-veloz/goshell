@@ -11,6 +11,9 @@ import (
 	"strings"
 )
 
+var history_file = os.Getenv("HOME") + "/.gocsh_history"
+var historyFile *os.File
+
 type Command struct {
 	name string
 	args []string
@@ -42,6 +45,52 @@ func parseInput(input string) ([]Command, error) {
 		commands = append(commands, Command{command, args})
 	}
 	return commands, nil
+}
+
+func initHistory() error {
+	var err error
+	historyFile, err = os.OpenFile(history_file, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	return err
+}
+
+func saveHistory(input string) error {
+	if historyFile == nil {
+		return nil // History disabled
+	}
+	_, err := historyFile.WriteString(input)
+	return err
+}
+
+func closeHistory() {
+	if historyFile != nil {
+		historyFile.Close()
+	}
+}
+
+func displayHistory() error {
+	file, err := os.Open(history_file)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fmt.Println(scanner.Text())
+	}
+	return scanner.Err()
+}
+
+func shouldBeInHistory(commands []Command) bool {
+	if len(commands) == 0 {
+		return false // Empty commands should not be saved
+	}
+	if len(commands) > 1 {
+		return true // Save piped commands to history
+	}
+	// Don't save "history" or "exit" commands
+	return commands[0].name != "history" && commands[0].name != "exit"
+
 }
 
 // setupSignalHandler creates a context that will be cancelled when CTRL+C is pressed.
@@ -111,6 +160,8 @@ func executeSingleCommand(command Command) error {
 		return nil
 	case "cd":
 		return executeCdCommand(command.args)
+	case "history":
+		return displayHistory()
 	default:
 		return executeNotBuiltInCommand(command.name, command.args)
 	}
@@ -178,6 +229,11 @@ func executePipeline(commands []Command) error {
 }
 
 func main() {
+	// Initialize history file
+	if err := initHistory(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not open history: %v\n", err)
+	}
+	defer closeHistory()
 
 	// read a line of input from the user
 	reader := bufio.NewReader(os.Stdin)
@@ -188,6 +244,7 @@ func main() {
 		// read the keyboard string
 		input, _ := reader.ReadString('\n')
 
+		// parse input to Command
 		commands, err := parseInput(input)
 		if err != nil {
 			fmt.Println(err)
@@ -196,6 +253,13 @@ func main() {
 
 		if err := executePipeline(commands); err != nil {
 			fmt.Println(err)
+		}
+
+		// save to history
+		if shouldBeInHistory(commands) {
+			if err := saveHistory(input); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not write to history: %v\n", err)
+			}
 		}
 	}
 
