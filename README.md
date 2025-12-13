@@ -2,6 +2,8 @@
 
 A simple, lightweight shell implementation written in Go.
 
+You can also check a step by step guide of this project in my technical blog https://daniela-veloz.github.io/blog/build-your-own-shell-in-go/
+
 ## Features
 
 - **Command Execution**: Execute any system command available on your PATH
