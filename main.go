@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -74,11 +75,8 @@ func displayHistory() error {
 	}
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		fmt.Println(scanner.Text())
-	}
-	return scanner.Err()
+	_, err = io.Copy(os.Stdout, file)
+	return err
 }
 
 func shouldBeInHistory(commands []Command) bool {
