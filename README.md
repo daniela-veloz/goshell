@@ -1,4 +1,4 @@
-# gocshell
+# goshell
 
 A simple, lightweight shell implementation written in Go.
 
